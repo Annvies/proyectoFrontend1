@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @typescript-eslint/no-explicit-any -- cada recurso trae su propia forma de fila; se tipa en su configuracion */
 
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import type { Paginated } from "@/lib/types";
@@ -57,6 +57,7 @@ export interface ResourceConfig {
   toBody: (values: Values, mode: "create" | "edit") => unknown;
   rowActions?: (row: any, reload: () => void) => ReactNode;
   noEdit?: boolean; // recursos que solo se crean y se operan con acciones (p. ej. matriculas)
+  keepOpenIfDirty?: boolean; // no cierra el formulario si hay cambios sin guardar
 }
 
 const PAGE_SIZE = 15;
@@ -77,6 +78,14 @@ export function ResourceManager({ config }: { config: ResourceConfig }) {
   const [lookups, setLookups] = useState<Record<string, Opt[]>>({});
   const [form, setForm] = useState<{ mode: "create" | "edit"; row: any | null } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const dirty = useRef(false);
+
+  // Cierra el formulario, salvo que el recurso pida conservar los cambios sin guardar
+  const closeForm = () => {
+    if (config.keepOpenIfDirty && form?.mode === "edit" && dirty.current) return;
+    dirty.current = false;
+    setForm(null);
+  };
 
   // Espera 300 ms despues de escribir antes de buscar
   useEffect(() => {
@@ -103,7 +112,7 @@ export function ResourceManager({ config }: { config: ResourceConfig }) {
   const load = useCallback(async () => {
     const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
     if (config.search && query) params.set(config.search.param, query);
-    Object.entries(filters).forEach(([k, v]) => v && params.set(k, v));
+    if (page === 1) Object.entries(filters).forEach(([k, v]) => v && params.set(k, v));
     try {
       setData(await api<Paginated<any>>(`${config.endpoint}?${params}`));
       setError(null);
@@ -175,7 +184,7 @@ export function ResourceManager({ config }: { config: ResourceConfig }) {
           <EmptyState title={config.empty} text="Prueba cambiando los filtros o crea un registro nuevo." />
         ) : (
           <Card className="overflow-hidden p-0">
-            <div className="overflow-x-auto">
+            <div>
               <table className="w-full min-w-[40rem] text-sm">
                 <thead>
                   <tr className="border-b border-line text-left text-xs text-muted">
@@ -240,7 +249,7 @@ export function ResourceManager({ config }: { config: ResourceConfig }) {
       )}
       {data && data.meta.totalPages <= 1 && <p className="mt-4 text-sm text-muted">{data.meta.total} registros</p>}
 
-      <Modal open={!!form} title={form?.mode === "edit" ? config.editTitle : config.createTitle} onClose={() => setForm(null)}>
+      <Modal open={!!form} title={form?.mode === "edit" ? config.editTitle : config.createTitle} onClose={closeForm}>
         {form && (
           <RecordForm
             key={form.row?._id ?? "new"}
@@ -248,7 +257,10 @@ export function ResourceManager({ config }: { config: ResourceConfig }) {
             mode={form.mode}
             row={form.row}
             lookups={lookups}
-            onClose={() => setForm(null)}
+            onDirty={(d) => {
+              dirty.current = d;
+            }}
+            onClose={closeForm}
             onSaved={(text) => {
               setForm(null);
               setNotice(text);
@@ -266,6 +278,7 @@ function RecordForm({
   mode,
   row,
   lookups,
+  onDirty,
   onClose,
   onSaved,
 }: {
@@ -273,10 +286,16 @@ function RecordForm({
   mode: "create" | "edit";
   row: any | null;
   lookups: Record<string, Opt[]>;
+  onDirty: (dirty: boolean) => void;
   onClose: () => void;
   onSaved: (text: string) => void;
 }) {
   const [values, setValues] = useState<Values>(() => config.initial(row));
+
+  // Avisa al contenedor si el formulario tiene cambios respecto al registro original
+  useEffect(() => {
+    onDirty(JSON.stringify(values) !== JSON.stringify(row ?? config.initial(null)));
+  }, [values, row, config, onDirty]);
   const [dynamic, setDynamic] = useState<Record<string, Opt[]>>({});
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);

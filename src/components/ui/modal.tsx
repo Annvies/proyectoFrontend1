@@ -3,7 +3,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
 
-// Ventana modal con el elemento nativo <dialog>: ya trae foco atrapado, Escape para cerrar y fondo bloqueado
+// Ventana modal con el elemento nativo <dialog>: ya trae foco atrapado y fondo bloqueado
 export function Modal({ open, title, onClose, children }: { open: boolean; title: string; onClose: () => void; children: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null);
 
@@ -18,7 +18,7 @@ export function Modal({ open, title, onClose, children }: { open: boolean; title
     <dialog
       ref={ref}
       onClose={onClose}
-      onClick={(e) => e.target === ref.current && onClose()}
+      onCancel={(e) => e.preventDefault()}
       aria-labelledby="modal-title"
       className="m-auto w-[min(34rem,calc(100vw-2rem))] rounded-(--radius-card) border border-line bg-surface p-0 text-left text-ink shadow-2xl backdrop:bg-ink/50"
     >

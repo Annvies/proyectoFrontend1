@@ -10,8 +10,9 @@ type Slot = ScheduleSlot & { enrolled?: number };
 export function WeekSchedule({ byDay }: { byDay: Partial<Record<Day, Slot[]>> }) {
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-      {DAYS.map((day) => {
-        const slots = byDay[day] ?? [];
+      {DAYS.map((day, col) => {
+        // Cada clase se ubica en la columna que le corresponde a su dia (la semana academica llega hasta el viernes)
+        const slots = DAYS.filter((d) => Math.min(DAYS.indexOf(d), 4) === col).flatMap((d) => byDay[d] ?? []);
         return (
           <Card key={day} className={cn("p-5", slots.length === 0 && "bg-canvas shadow-none")}>
             <h2 className="mb-3 font-extrabold">{DAY_LABEL[day]}</h2>
@@ -19,8 +20,8 @@ export function WeekSchedule({ byDay }: { byDay: Partial<Record<Day, Slot[]>> })
               <p className="text-sm text-muted">Sin clases</p>
             ) : (
               <ul className="space-y-3">
-                {slots.map((s) => (
-                  <li key={`${s.subject.code}-${s.group}-${s.startTime}`} className={cn("rounded-xl border p-3.5", subjectTone(s.subject.code))}>
+                {slots.map((s, i) => (
+                  <li key={`${s.subject.code}-${s.group}-${s.startTime}-${i}`} className={cn("rounded-xl border p-3.5", subjectTone(s.subject.code))}>
                     <p className="flex items-center gap-1.5 text-sm font-bold">
                       <Clock className="size-3.5" aria-hidden /> {s.startTime} – {s.endTime}
                     </p>

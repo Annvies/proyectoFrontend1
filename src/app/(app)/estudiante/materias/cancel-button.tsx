@@ -1,13 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 
 // Cancelar pide confirmacion: libera el cupo y no se puede deshacer desde aqui
 export function CancelButton({ id, name }: { id: string; name: string }) {
-  const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -17,7 +15,8 @@ export function CancelButton({ id, name }: { id: string; name: string }) {
     setError(null);
     try {
       await api(`/enrollments/${id}/cancel`, { method: "PATCH" });
-      router.refresh();
+      setConfirming(false);
+      setLoading(false);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "No se pudo cancelar");
       setLoading(false);

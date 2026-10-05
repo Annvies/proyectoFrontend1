@@ -251,6 +251,7 @@ const users: ResourceConfig = {
   createTitle: "Nuevo usuario",
   editTitle: "Editar usuario",
   newLabel: "Nuevo usuario",
+  keepOpenIfDirty: true,
   empty: "No hay usuarios",
   search: { param: "q", label: "Buscar usuario", placeholder: "Nombre o correo" },
   filters: [

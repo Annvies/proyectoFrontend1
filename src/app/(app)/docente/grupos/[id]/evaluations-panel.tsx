@@ -41,7 +41,7 @@ export function EvaluationsPanel({ groupId, readOnly }: { groupId: string; readO
   }, [load]);
 
   const total = (items ?? []).reduce((sum, e) => sum + e.weight, 0);
-  const remaining = 100 - total;
+  const remaining = total - 100;
 
   async function run(action: () => Promise<unknown>, success: string) {
     setBusy(true);

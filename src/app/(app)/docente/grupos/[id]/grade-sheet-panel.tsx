@@ -16,7 +16,7 @@ const message = (e: unknown, fallback: string) => (e instanceof ApiError ? e.mes
 
 // Nota valida: 0 a 5, maximo 2 decimales (acepta coma o punto)
 const parse = (text: string): number | null => {
-  const t = text.trim().replace(",", ".");
+  const t = text.trim();
   if (!/^\d(\.\d{1,2})?$/.test(t)) return null;
   const n = Number(t);
   return n >= 0 && n <= 5 ? n : null;
@@ -207,7 +207,7 @@ export function GradeSheetPanel({ groupId, readOnly }: { groupId: string; readOn
           </table>
         </div>
       </Card>
-      <p className="mt-2 text-xs text-muted">Escribe notas de 0.0 a 5.0 (máximo 2 decimales). Las celdas modificadas se resaltan hasta que las guardes.</p>
+      <p className="mt-2 text-xs text-muted">Escribe notas de 0.0 a 5.0 (máximo 2 decimales). Se aprueba con 3.0 o más. Las celdas modificadas se resaltan hasta que las guardes.</p>
 
       {!readOnly && (
         <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-(--radius-card) border border-line bg-surface p-4 shadow-(--shadow-card)">
