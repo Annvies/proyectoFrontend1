@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { BarChart3, Bell, BookOpen, Building2, DoorOpen, GraduationCap, Layers, Presentation, ShieldCheck, CalendarDays, ClipboardList, History, Home, LogOut, Map, Megaphone, Menu, PlusCircle, User, Users, X, type LucideIcon } from "lucide-react";
@@ -45,6 +45,8 @@ export function AppShell({ name, role, items, common, children }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [unread, setUnread] = useState(0);
+  const drawer = useRef<HTMLDivElement>(null);
+  const menuButton = useRef<HTMLButtonElement>(null);
 
   // Contador de notificaciones sin leer (se refresca cada minuto)
   useEffect(() => {
@@ -68,6 +70,44 @@ export function AppShell({ name, role, items, common, children }: Props) {
   }
 
   const isActive = (href: string) => (href === items[0]?.href ? pathname === href : pathname === href || pathname.startsWith(`${href}/`));
+
+  // El cajon movil es un role="dialog" hecho a mano (a diferencia de <Modal>, que usa el
+  // <dialog> nativo): hay que supplying el foco, mantenerlo dentro con Tab y cerrar con ESC.
+  const closeDrawer = () => {
+    setOpen(false);
+    menuButton.current?.focus();
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const panel = drawer.current;
+    panel?.querySelector<HTMLElement>("a, button")?.focus();
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setOpen(false);
+        menuButton.current?.focus();
+        return;
+      }
+      if (e.key !== "Tab" || !panel) return;
+
+      const focusables = [...panel.querySelectorAll<HTMLElement>('a[href], button:not([disabled])')].filter((el) => el.offsetParent !== null);
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open]);
 
   const renderLink = (item: NavItem) => {
     const Icon = ICONS[item.icon];
@@ -133,16 +173,16 @@ export function AppShell({ name, role, items, common, children }: Props) {
       {/* Movil: barra superior + cajon */}
       <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-surface px-4 py-2.5 lg:hidden">
         <Brand />
-        <button onClick={() => setOpen(true)} aria-label="Abrir menú" className="relative flex size-11 items-center justify-center rounded-xl hover:bg-primary-50">
+        <button ref={menuButton} onClick={() => setOpen(true)} aria-label="Abrir menú" aria-expanded={open} className="relative flex size-11 items-center justify-center rounded-xl hover:bg-primary-50">
           <Menu className="size-5" aria-hidden />
           {unread > 0 && <span className="absolute top-2.5 right-2.5 size-2.5 rounded-full bg-danger-600" />}
         </button>
       </header>
       {open && (
         <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Menú">
-          <div className="absolute inset-0 bg-ink/50" onClick={() => setOpen(false)} />
-          <div className="absolute inset-y-0 left-0 w-72 max-w-[85vw] bg-surface shadow-xl">
-            <button onClick={() => setOpen(false)} aria-label="Cerrar menú" className="absolute top-3 right-3 flex size-10 items-center justify-center rounded-xl hover:bg-primary-50">
+          <div className="absolute inset-0 bg-ink/50" onClick={closeDrawer} />
+          <div ref={drawer} className="absolute inset-y-0 left-0 w-72 max-w-[85vw] bg-surface shadow-xl">
+            <button onClick={closeDrawer} aria-label="Cerrar menú" className="absolute top-3 right-3 flex size-10 items-center justify-center rounded-xl hover:bg-primary-50">
               <X className="size-5" aria-hidden />
             </button>
             {sidebar}

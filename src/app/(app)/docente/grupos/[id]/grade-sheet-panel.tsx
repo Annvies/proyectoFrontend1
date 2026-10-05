@@ -14,9 +14,12 @@ import { Alert, EmptyState } from "@/components/ui/feedback";
 const key = (enrollment: string, evaluation: string) => `${enrollment}:${evaluation}`;
 const message = (e: unknown, fallback: string) => (e instanceof ApiError ? e.message : fallback);
 
-// Nota valida: 0 a 5, maximo 2 decimales (acepta coma o punto)
+// Nota valida: 0 a 5, maximo 2 decimales.
+// Acepta coma o punto como separador decimal: la app es es-CO y el teclado numerico del
+// movil suele escribir coma. Antes solo se aceptaba el punto, pese a que el comentario
+// decia lo contrario, y "4,5" caia en "notas invalidas".
 const parse = (text: string): number | null => {
-  const t = text.trim();
+  const t = text.trim().replace(",", ".");
   if (!/^\d(\.\d{1,2})?$/.test(t)) return null;
   const n = Number(t);
   return n >= 0 && n <= 5 ? n : null;

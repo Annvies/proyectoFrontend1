@@ -4,11 +4,19 @@ import { Card } from "@/components/ui/card";
 import { EmptyState, PageHeader } from "@/components/ui/feedback";
 import { StatCard } from "@/components/stat-card";
 import { apiGet } from "@/lib/server";
-import type { Dashboard } from "@/lib/types";
+import type { Dashboard, EnrollmentStatus } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Inicio" };
 
-const STATUS_LABEL: Record<string, string> = { activa: "Activas", aprobada: "Aprobadas", reprobada: "Reprobadas", cancelada: "Canceladas" };
+// El backend agrupa por el valor del estado ("activa", "aprobada", ...), asi que la clave de
+// lectura es el estado y la etiqueta solo se muestra. Antes se indexaba por la etiqueta y
+// todos los contadores caian a 0.
+const ENROLLMENT_STATUS: { key: EnrollmentStatus; label: string }[] = [
+  { key: "activa", label: "Activas" },
+  { key: "aprobada", label: "Aprobadas" },
+  { key: "reprobada", label: "Reprobadas" },
+  { key: "cancelada", label: "Canceladas" },
+];
 
 export default async function AdminHome() {
   const d = await apiGet<Dashboard>("/reports/dashboard");
@@ -20,7 +28,7 @@ export default async function AdminHome() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard icon={GraduationCap} label="Estudiantes activos" value={d.active.students} />
-        <StatCard icon={Users} label="Docentes activos" value={d.active.students} />
+        <StatCard icon={Users} label="Docentes activos" value={d.active.teachers} />
         <StatCard icon={Layers} label="Programas" value={d.active.programs} hint={`${d.active.subjects} materias activas`} />
         <StatCard icon={Building2} label="Facultades" value={d.faculties} hint={`${d.active.classrooms} salones activos`} />
       </div>
@@ -52,10 +60,10 @@ export default async function AdminHome() {
             </div>
           </div>
           <ul className="mt-6 grid grid-cols-2 gap-3 border-t border-line pt-5 sm:grid-cols-4">
-            {Object.entries(STATUS_LABEL).map(([key, label]) => (
+            {ENROLLMENT_STATUS.map(({ key, label }) => (
               <li key={key}>
                 <p className="text-sm text-muted">{label}</p>
-                <p className="text-xl font-extrabold">{p.enrollmentsByStatus[label] ?? 0}</p>
+                <p className="text-xl font-extrabold">{p.enrollmentsByStatus[key] ?? 0}</p>
               </li>
             ))}
           </ul>

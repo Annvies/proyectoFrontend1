@@ -15,8 +15,9 @@ type Notice = { tone: "danger" | "success"; text: string } | null;
 export function AccountForms({ name, email, roleLabel }: { name: string; email: string; roleLabel: string }) {
   const router = useRouter();
 
+  // dirty se deriva del texto en vez de un estado: antes `setDirty` nunca se llamaba, asi
+  // que `!dirty` era siempre true y el boton "Guardar nombre" jamas se habilitaba.
   const [newName, setNewName] = useState(name);
-  const [dirty, setDirty] = useState(false);
   const [nameNotice, setNameNotice] = useState<Notice>(null);
   const [savingName, setSavingName] = useState(false);
 
@@ -78,7 +79,7 @@ export function AccountForms({ name, email, roleLabel }: { name: string; email: 
           {nameNotice && <Alert tone={nameNotice.tone}>{nameNotice.text}</Alert>}
           <Field label="Nombre completo" name="name" value={newName} onChange={(e) => setNewName(e.target.value)} required />
           <Field label="Correo" name="email" value={email} disabled hint="El correo solo lo puede cambiar un administrador." />
-          <Button type="submit" loading={savingName} disabled={!dirty || !newName.trim() || newName.trim() === name}>
+          <Button type="submit" loading={savingName} disabled={!newName.trim() || newName.trim() === name}>
             Guardar nombre
           </Button>
         </form>

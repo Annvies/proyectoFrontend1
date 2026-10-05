@@ -77,14 +77,25 @@ export function ResourceManager({ config }: { config: ResourceConfig }) {
   const [error, setError] = useState<string | null>(null);
   const [lookups, setLookups] = useState<Record<string, Opt[]>>({});
   const [form, setForm] = useState<{ mode: "create" | "edit"; row: any | null } | null>(null);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const dirty = useRef(false);
 
-  // Cierra el formulario, salvo que el recurso pida conservar los cambios sin guardar
-  const closeForm = () => {
-    if (config.keepOpenIfDirty && form?.mode === "edit" && dirty.current) return;
+  const discardForm = () => {
     dirty.current = false;
+    setConfirmDiscard(false);
     setForm(null);
+  };
+
+  // Si el recurso pide conservar los cambios sin guardar, pedir confirmacion en vez de
+  // ignorar la pulsacion: antes el boton X, "Cancelar" y ESC no hacian nada y sin aviso,
+  // dejando al usuario atrapado en la ventana.
+  const closeForm = () => {
+    if (config.keepOpenIfDirty && form?.mode === "edit" && dirty.current) {
+      setConfirmDiscard(true);
+      return;
+    }
+    discardForm();
   };
 
   // Espera 300 ms despues de escribir antes de buscar
@@ -97,12 +108,18 @@ export function ResourceManager({ config }: { config: ResourceConfig }) {
   }, [search]);
 
   // Listas auxiliares (por ejemplo, facultades para filtrar programas)
+  const [lookupError, setLookupError] = useState<string | null>(null);
+
+  // Listas auxiliares (por ejemplo, facultades para filtrar programas)
   useEffect(() => {
     let alive = true;
     Object.entries(config.lookups ?? {}).forEach(([key, def]) => {
       api<Paginated<any>>(def.endpoint)
         .then((r) => alive && setLookups((l) => ({ ...l, [key]: r.data.map((x) => ({ value: x._id, label: def.label(x) })) })))
-        .catch(() => undefined);
+        // Antes el fallo se tragaba y el <select> quedaba vacio sin explicacion
+        .catch((e) => {
+          if (alive) setLookupError(message(e, `No se pudieron cargar las opciones de ${key}`));
+        });
     });
     return () => {
       alive = false;
@@ -177,6 +194,7 @@ export function ResourceManager({ config }: { config: ResourceConfig }) {
         </div>
       )}
       {error && <Alert>{error}</Alert>}
+      {lookupError && <Alert>{lookupError} Recarga la página para reintentar.</Alert>}
       {!data && !error && <p className="text-sm text-muted">Cargando…</p>}
 
       {data &&
@@ -184,7 +202,9 @@ export function ResourceManager({ config }: { config: ResourceConfig }) {
           <EmptyState title={config.empty} text="Prueba cambiando los filtros o crea un registro nuevo." />
         ) : (
           <Card className="overflow-hidden p-0">
-            <div>
+            {/* overflow-x-auto es imprescindible: la tabla tiene min-w-[40rem] y sin scroll la
+                columna "Acciones" quedaba inalcanzable en movil */}
+            <div className="overflow-x-auto">
               <table className="w-full min-w-[40rem] text-sm">
                 <thead>
                   <tr className="border-b border-line text-left text-xs text-muted">
@@ -249,6 +269,20 @@ export function ResourceManager({ config }: { config: ResourceConfig }) {
       )}
       {data && data.meta.totalPages <= 1 && <p className="mt-4 text-sm text-muted">{data.meta.total} registros</p>}
 
+      <Modal open={confirmDiscard} title="Descartar los cambios" onClose={() => setConfirmDiscard(false)}>
+        <div className="space-y-4">
+          <Alert tone="danger">Hay cambios sin guardar en este formulario. Si sales ahora se perderán.</Alert>
+          <div className="flex justify-end gap-3">
+            <Button variant="ghost" onClick={() => setConfirmDiscard(false)}>
+              Seguir editando
+            </Button>
+            <Button variant="danger" onClick={discardForm}>
+              Descartar cambios
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       <Modal open={!!form} title={form?.mode === "edit" ? config.editTitle : config.createTitle} onClose={closeForm}>
         {form && (
           <RecordForm
@@ -297,6 +331,7 @@ function RecordForm({
     onDirty(JSON.stringify(values) !== JSON.stringify(row ?? config.initial(null)));
   }, [values, row, config, onDirty]);
   const [dynamic, setDynamic] = useState<Record<string, Opt[]>>({});
+  const [optionError, setOptionError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -316,7 +351,11 @@ function RecordForm({
       }
       api<Paginated<any>>(url)
         .then((r) => alive && setDynamic((d) => ({ ...d, [f.name]: r.data.filter((x) => x._id !== row?._id).map((x) => ({ value: x._id, label: f.optionsFrom!.label(x) })) })))
-        .catch(() => undefined);
+        .catch((e) => {
+          if (!alive) return;
+          setDynamic((d) => ({ ...d, [f.name]: [] }));
+          setOptionError(message(e, `No se pudieron cargar las opciones de ${f.label}`));
+        });
     });
     return () => {
       alive = false;
@@ -324,11 +363,39 @@ function RecordForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [endpoints]);
 
-  const missing = fields.some((f) => {
+  const problems = fields.flatMap((f) => {
     const v = values[f.name];
-    if (!f.required) return false;
-    return f.type === "schedule" ? !Array.isArray(v) || v.length === 0 || (v as Slot[]).some((x) => !x.startTime || !x.endTime || !x.classroom) : v === "" || v === undefined;
+    const scheduleProblem = () => {
+      const slots = Array.isArray(v) ? (v as Slot[]) : [];
+      const bad = slots.findIndex((x) => !x.day || !x.startTime || !x.endTime || !x.classroom);
+      if (bad >= 0) return `Completa día, inicio, fin y salón de la franja ${bad + 1}.`;
+      return null;
+    };
+
+    if (f.type === "schedule") {
+      const slots = Array.isArray(v) ? (v as Slot[]) : [];
+      if (f.required && slots.length === 0) return "Agrega al menos una franja.";
+      return scheduleProblem() ? [scheduleProblem()!] : [];
+    }
+    if (f.type === "checkbox") return [];
+
+    const raw = v === undefined || v === null ? "" : String(v);
+
+    // trim: un campo con solo espacios no es un valor, y no debe pasar como "relleno"
+    if (raw.trim() === "") return f.required ? [`${f.label} es obligatorio.`] : [];
+
+    if (f.type === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw.trim())) return ["Ingresa un correo válido."];
+
+    // number: el atributo min/max no basta, el formulario va con noValidate
+    if (f.type === "number") {
+      const n = Number(raw);
+      if (!Number.isFinite(n)) return [`${f.label} debe ser un número.`];
+      if (f.min !== undefined && n < f.min) return [`${f.label} no puede ser menor que ${f.min}.`];
+      if (f.max !== undefined && n > f.max) return [`${f.label} no puede ser mayor que ${f.max}.`];
+    }
+    return [];
   });
+  const missing = problems.length > 0;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -348,6 +415,16 @@ function RecordForm({
   return (
     <form onSubmit={submit} className="space-y-4" noValidate>
       {error && <Alert>{error}</Alert>}
+      {optionError && <Alert>{optionError}</Alert>}
+      {problems.length > 0 && (
+        <Alert tone="danger">
+          <ul className="list-inside list-disc">
+            {problems.map((p) => (
+              <li key={p}>{p}</li>
+            ))}
+          </ul>
+        </Alert>
+      )}
       {fields.map((f) => {
         const id = `f-${f.name}`;
         const value = values[f.name];

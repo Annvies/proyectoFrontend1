@@ -17,7 +17,9 @@ export function proxy(request: NextRequest) {
 
   if (!session) return NextResponse.redirect(new URL("/login", request.url));
 
-  const area = Object.keys(AREAS).find((p) => pathname === p);
+  // La comparacion debe incluir las subrutas: con `pathname === p` el guardia no cubria
+  // /admin/reportes, /docente/grupos/... y cualquier otra ruta interna del area.
+  const area = Object.keys(AREAS).find((p) => pathname === p || pathname.startsWith(`${p}/`));
   if (area && AREAS[area] !== session.role) return NextResponse.redirect(new URL(HOME[session.role], request.url));
 
   return NextResponse.next();

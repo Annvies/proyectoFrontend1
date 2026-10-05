@@ -3,7 +3,9 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
 
-// Ventana modal con el elemento nativo <dialog>: ya trae foco atrapado y fondo bloqueado
+// Ventana modal con el elemento nativo <dialog>: ya trae foco atrapado y fondo bloqueado.
+// `onCancel` se cancela a proposito para que la app decida que hacer al pulsar ESC y asi
+// pueda avisar antes de descartar cambios. `EscapeHint` pide confirmacion al usuario.
 export function Modal({ open, title, onClose, children }: { open: boolean; title: string; onClose: () => void; children: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null);
 
@@ -18,7 +20,13 @@ export function Modal({ open, title, onClose, children }: { open: boolean; title
     <dialog
       ref={ref}
       onClose={onClose}
-      onCancel={(e) => e.preventDefault()}
+      /* ESC: se delega la decision en la app y se cancela el cierre nativo, para que un
+         formulario con cambios sin guardar pueda pedir confirmacion. Sin esto, el `cancel`
+         preventDefault hacia que ESC no cerrara NINGUN modal (WCAG 2.1.1). */
+      onCancel={(e) => {
+        e.preventDefault();
+        onClose();
+      }}
       aria-labelledby="modal-title"
       className="m-auto w-[min(34rem,calc(100vw-2rem))] rounded-(--radius-card) border border-line bg-surface p-0 text-left text-ink shadow-2xl backdrop:bg-ink/50"
     >

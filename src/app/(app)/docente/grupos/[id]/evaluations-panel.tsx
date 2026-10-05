@@ -26,6 +26,7 @@ export function EvaluationsPanel({ groupId, readOnly }: { groupId: string; readO
   const [editWeight, setEditWeight] = useState("");
   const [deleting, setDeleting] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [fieldError, setFieldError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -60,10 +61,23 @@ export function EvaluationsPanel({ groupId, readOnly }: { groupId: string; readO
     }
   }
 
+  // El formulario va con noValidate, asi que el peso hay que validarlo aqui: Number("abc")
+  // es NaN y se serializaba como null en el cuerpo de la peticion.
+  const weightOf = (v: string): number | null => {
+    const n = Number(v.trim());
+    return Number.isInteger(n) && n >= 1 && n <= 100 ? n : null;
+  };
+
   async function add(event: FormEvent) {
     event.preventDefault();
+    const w = weightOf(weight);
+    if (!name.trim() || w === null) {
+      setFieldError(w === null ? "El peso debe ser un número entero entre 1 y 100." : "Escribe el nombre de la evaluación.");
+      return;
+    }
+    setFieldError(null);
     setAdding(true);
-    const ok = await run(() => api("/evaluations", { method: "POST", body: { group: groupId, name: name.trim(), weight: Number(weight) } }), "Evaluación creada.");
+    const ok = await run(() => api("/evaluations", { method: "POST", body: { group: groupId, name: name.trim(), weight: w } }), "Evaluación creada.");
     if (ok) {
       setName("");
       setWeight("");
@@ -72,7 +86,13 @@ export function EvaluationsPanel({ groupId, readOnly }: { groupId: string; readO
   }
 
   async function saveEdit(id: string) {
-    const ok = await run(() => api(`/evaluations/${id}`, { method: "PATCH", body: { name: editName.trim(), weight: Number(editWeight) } }), "Evaluación actualizada.");
+    const w = weightOf(editWeight);
+    if (!editName.trim() || w === null) {
+      setFieldError(w === null ? "El peso debe ser un número entero entre 1 y 100." : "El nombre no puede quedar vacío.");
+      return;
+    }
+    setFieldError(null);
+    const ok = await run(() => api(`/evaluations/${id}`, { method: "PATCH", body: { name: editName.trim(), weight: w } }), "Evaluación actualizada.");
     if (ok) setEditing(null);
   }
 
@@ -182,8 +202,9 @@ export function EvaluationsPanel({ groupId, readOnly }: { groupId: string; readO
           <Card className="p-5">
             <h2 className="mb-4 font-bold">Nueva evaluación</h2>
             <form onSubmit={add} className="space-y-4" noValidate>
+              {fieldError && <Alert>{fieldError}</Alert>}
               <Field label="Nombre" name="new-name" placeholder="Parcial 1" value={name} onChange={(e) => setName(e.target.value)} />
-              <Field label="Peso (%)" name="new-weight" type="number" min={1} max={100} placeholder="25" value={weight} onChange={(e) => setWeight(e.target.value)} />
+              <Field label="Peso (%)" name="new-weight" type="number" min={1} max={100} placeholder="25" value={weight} onChange={(e) => setWeight(e.target.value)} hint="Los porcentajes de todas las evaluaciones deben sumar 100." />
               <Button type="submit" loading={adding} disabled={!name.trim() || !weight || busy} className="w-full">
                 <Plus className="size-4" aria-hidden /> Agregar
               </Button>

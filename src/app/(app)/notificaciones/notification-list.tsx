@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Alert, EmptyState } from "@/components/ui/feedback";
 
+const message = (e: unknown, fallback: string) => (e instanceof ApiError ? e.message : fallback);
+
 type Page = Paginated<Notification> & { unread: number };
 
 const TYPE: Record<Notification["type"], { icon: LucideIcon; label: string }> = {
@@ -44,14 +46,26 @@ export function NotificationList() {
     void load();
   }, [load]);
 
+  // Antes el fallo se ignoraba en silencio: la lista se recargaba y el aviso seguia
+  // apareciendo como "Nueva", sin ninguna explicacion de por que.
   async function markRead(id: string) {
-    await api(`/notifications/${id}/read`, { method: "PATCH" }).catch(() => undefined);
-    void load();
+    setError(null);
+    try {
+      await api(`/notifications/${id}/read`, { method: "PATCH" });
+      await load();
+    } catch (e) {
+      setError(message(e, "No se pudo marcar la notificación como leída"));
+    }
   }
 
   async function markAll() {
-    await api("/notifications/read-all", { method: "PATCH" }).catch(() => undefined);
-    void load();
+    setError(null);
+    try {
+      await api("/notifications/read-all", { method: "PATCH" });
+      await load();
+    } catch (e) {
+      setError(message(e, "No se pudieron marcar todas como leídas"));
+    }
   }
 
   if (error) return <Alert>{error}</Alert>;

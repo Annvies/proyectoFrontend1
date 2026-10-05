@@ -4,7 +4,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Ban, Lock, Play, Search, Send, type LucideIcon } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
-import { date, DAY_SHORT, STATUS_LABEL, STATUS_TONE } from "@/lib/format";
+import { date, DAY_SHORT, grade, STATUS_LABEL, STATUS_TONE } from "@/lib/format";
 import type { Paginated } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,9 @@ import { ACTIVE_OPTIONS, ActiveBadge, ResourceManager, type Opt, type ResourceCo
 const text = (v: unknown) => String(v ?? "").trim();
 const id = (ref: any): string => (ref ? String(ref._id ?? ref) : "");
 const message = (e: unknown, fallback: string) => (e instanceof ApiError ? e.message : fallback);
+// Reutiliza el helper de formato, que ya trata null y undefined como "sin nota".
+// Evita el .toFixed() sobre null.
+const finalGrade = (r: { finalGrade?: number | null }) => grade(r.finalGrade);
 
 const DAYS: Opt[] = [
   { value: "lunes", label: "Lunes" },
@@ -244,9 +247,13 @@ const groups: ResourceConfig = {
     { header: "Cupos", align: "right", cell: (r) => `${r.enrolled} / ${r.capacity}` },
     {
       header: "Horario",
+      // r.schedule puede venir ausente en respuestas parciales; sin el ?. la fila tumbaba
+      // la tabla entera
       cell: (r) => (
         <span className="text-xs text-muted">
-          {r.schedule.map((s: any) => `${DAY_SHORT[s.day as keyof typeof DAY_SHORT]} ${s.startTime}–${s.endTime}${s.classroom ? ` (${s.classroom.code})` : ""}`).join(" · ")}
+          {(r.schedule ?? [])
+            .map((s: any) => `${DAY_SHORT[s.day as keyof typeof DAY_SHORT] ?? s.day} ${s.startTime}–${s.endTime}${s.classroom ? ` (${s.classroom.code})` : ""}`)
+            .join(" · ") || "—"}
         </span>
       ),
     },
@@ -325,7 +332,7 @@ const enrollments: ResourceConfig = {
       ),
     },
     { header: "Periodo", cell: (r) => r.period?.code },
-    { header: "Nota final", align: "right", cell: (r) => (r.finalGrade !== undefined ? r.finalGrade.toFixed(1) : "—") },
+    { header: "Nota final", align: "right", cell: (r) => finalGrade(r) },
     { header: "Estado", cell: (r) => <Badge tone={STATUS_TONE[r.status as keyof typeof STATUS_TONE]}>{STATUS_LABEL[r.status as keyof typeof STATUS_LABEL]}</Badge> },
   ],
   fields: [
@@ -364,6 +371,7 @@ interface UserHit {
 export function SendNotice() {
   const [search, setSearch] = useState("");
   const [hits, setHits] = useState<UserHit[]>([]);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [target, setTarget] = useState<UserHit | null>(null);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -375,12 +383,20 @@ export function SendNotice() {
     if (search.trim().length < 2) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setHits([]);
+      setSearchError(null);
       return;
     }
     const t = setTimeout(() => {
       api<Paginated<UserHit>>(`/users?q=${encodeURIComponent(search.trim())}&active=true&limit=6`)
-        .then((r) => setHits(r.data))
-        .catch(() => setHits([]));
+        .then((r) => {
+          setHits(r.data);
+          setSearchError(null);
+        })
+        // Antes un fallo de red se confundia con "no hay usuarios con ese nombre"
+        .catch((e) => {
+          setHits([]);
+          setSearchError(message(e, "No se pudo buscar el destinatario"));
+        });
     }, 300);
     return () => clearTimeout(t);
   }, [search]);
@@ -423,7 +439,10 @@ export function SendNotice() {
           </div>
         ) : (
           <div>
-            <Field label="Destinatario" name="to" placeholder="Busca por nombre o correo" value={search} onChange={(e) => setSearch(e.target.value)} icon={<Search className="size-4" aria-hidden />} hint="Escribe al menos 2 letras." />
+            <Field label="Destinatario" name="to" placeholder="Busca por nombre o correo" value={search} onChange={(e) => setSearch(e.target.value)} icon={<Search className="size-4" aria-hidden />} hint="Escribe al menos 2 letras." error={searchError ?? undefined} />
+            {hits.length === 0 && !searchError && search.trim().length >= 2 && (
+              <p className="mt-2 text-sm text-muted">Sin coincidencias. Revisa el nombre o el correo.</p>
+            )}
             {hits.length > 0 && (
               <ul className="mt-2 divide-y divide-line overflow-hidden rounded-xl border border-line">
                 {hits.map((u) => (
