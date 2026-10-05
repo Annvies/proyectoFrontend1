@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { COOKIE, decodeToken, type Session } from "./session";
 
 export const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:3000";
+// Raiz de la API: el backend publica todas sus rutas bajo /api/v1 (setGlobalPrefix en su main.ts)
+export const API_URL = `${BACKEND_URL}/api/v1`;
 
 export class ApiError extends Error {
   constructor(
@@ -32,7 +34,7 @@ export async function apiGet<T>(path: string): Promise<T> {
   const token = jar.get(COOKIE)?.value;
   let res: Response;
   try {
-    res = await fetch(`${BACKEND_URL}/api${path}`, {
+    res = await fetch(`${API_URL}${path}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       cache: "no-store",
     });
